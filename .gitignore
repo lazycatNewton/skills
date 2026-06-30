@@ -216,3 +216,20 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Project-generated outputs
+output/
+
+# Local validation tests generated during skill development
+tests/
+
+# AI assistant guidance markdown files
+AGENTS.md
+CLAUDE.md
+GEMINI.md
+CODEX.md
+*.ai.md
+*.AI.md
+
+# Local IDE metadata
+.idea/

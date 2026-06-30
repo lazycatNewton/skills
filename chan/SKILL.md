@@ -183,5 +183,6 @@ pip install pandas numpy matplotlib mplfinance
 - [ ] 原始 K 线映射正常（analysis_bars 数量等于 bars 数量）
 - [ ] 分型识别有产出（≥ 5 个）
 - [ ] 笔检测有产出（≥ 3 笔）
+- [ ] `python3 -m pytest tests` 通过（当前环境需先安装 pytest）
 - [ ] `plot_bars.py` 已生成 PNG 或 SVG 图表
 - [ ] 输出结论区分算法事实、信号解释和投资风险
