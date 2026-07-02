@@ -46,7 +46,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--input", required=True, help="Saved bars JSON or raw mcp_stock payload.")
     parser.add_argument("--symbol", help="6-digit A-share stock code. Defaults to payload metadata or filename.")
     parser.add_argument("--name", default="", help="Stock display name used in report titles.")
-    parser.add_argument("--output-dir", default="output/reports", help="Directory for final PDF reports.")
+    parser.add_argument("--output-dir", default="output/reports/chan", help="Directory for final PDF reports.")
     parser.add_argument("--width", type=int, default=1400, help="Temporary chart width in pixels.")
     parser.add_argument("--height", type=int, default=920, help="Temporary chart height in pixels.")
     parser.add_argument("--dpi", type=int, default=140, help="Temporary chart DPI.")

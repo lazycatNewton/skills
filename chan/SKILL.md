@@ -50,7 +50,7 @@ python3 chan/scripts/report.py \
 正式产物只保留在：
 
 ```text
-output/reports/{symbol}-{name}-{start_date}-{end_date}.pdf
+output/reports/chan/{symbol}-{name}-{start_date}-{end_date}.pdf
 ```
 
 `report.py` 会完成数据归一化、缠论分析、临时图表生成、PDF 组装，并在报告生成后清理本次匹配的 `output/bars/` 与 `output/charts/` 产物。报告主图优先使用 SVG；PNG 仅作为当前 PDF 后端需要时的临时兼容图。不要把 `output/bars/` 或 `output/charts/` 作为最终交付。
@@ -198,7 +198,7 @@ pip install pandas numpy matplotlib mplfinance reportlab
 4. **背离/背驰信号少**：背离需要同类分型价格与 MACD DIF 不确认；背驰还需要更严格的趋势结构，半年数据可能只有少数信号。
 5. **图表后端不可用**：SVG 主图由内置渲染器生成；缺少 `pandas`、`matplotlib` 或 `mplfinance` 时，PDF 可能缺少 PNG fallback 图。
 6. **PDF 依赖缺失**：缺少 `reportlab` 时使用 matplotlib PDF fallback；如需更精细排版，安装 `reportlab` 与 `svglib`。
-7. **最终输出唯一性**：`output/reports/` 下的 PDF 是正式产物，`output/bars/` 与 `output/charts/` 仅用于调试或临时验证。
+7. **最终输出唯一性**：`output/reports/chan/` 下的 PDF 是正式产物，`output/bars/` 与 `output/charts/` 仅用于调试或临时验证。
 
 ## Verification Checklist
 

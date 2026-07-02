@@ -218,7 +218,9 @@ __marimo__/
 .streamlit/secrets.toml
 
 # Project-generated outputs
-output/
+output/*
+!output/archive/
+!output/archive/**
 
 # Local validation tests generated during skill development
 tests/
