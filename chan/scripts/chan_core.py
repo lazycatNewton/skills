@@ -212,7 +212,7 @@ def detect_fractals(analysis_bars: list[AnalysisKBar]) -> list[Fractal]:
     return filtered
 
 
-def detect_strokes(fractals: list[Fractal], min_basic_bars: int = 6) -> list[Stroke]:
+def detect_strokes(fractals: list[Fractal], min_basic_bars: int = 3) -> list[Stroke]:
     strokes: list[Stroke] = []
     if not fractals:
         return strokes
@@ -410,7 +410,7 @@ def detect_divergences(
     deduped: dict[tuple[str, int], Divergence] = {}
     for divergence in divergences:
         deduped[(divergence.kind, divergence.index)] = divergence
-    return list(deduped.values())
+    return sorted(deduped.values(), key=lambda divergence: (divergence.index, divergence.kind))
 
 
 def detect_signals(
@@ -418,6 +418,11 @@ def detect_signals(
     centers: list[Zhongshu],
     divergences: list[Divergence],
 ) -> list[ChanSignal]:
+    """Detect simplified stroke-level buy/sell points.
+
+    Ordinary DIV-B/DIV-S divergences are observation signals only. First buy/sell
+    points are emitted only from exhaustion markers at stroke endpoints.
+    """
     signals: list[ChanSignal] = []
     divergence_by_index = {divergence.index: divergence for divergence in divergences}
 
@@ -473,7 +478,7 @@ def detect_signals(
     deduped: dict[tuple[str, int], ChanSignal] = {}
     for signal in signals:
         deduped[(signal.kind, signal.index)] = signal
-    return list(deduped.values())
+    return sorted(deduped.values(), key=lambda signal: (signal.index, signal.kind))
 
 
 def analyze_chan(raw_bars: list[dict[str, Any]]) -> ChanAnalysis:

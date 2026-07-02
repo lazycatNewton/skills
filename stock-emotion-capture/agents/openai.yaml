@@ -1,0 +1,13 @@
+interface:
+  display_name: "Stock Emotion Capture"
+  short_description: "A-share emotion review and observation pools"
+  default_prompt: "Use $stock-emotion-capture to review today’s A-share limit-up emotion and build a next-day observation pool."
+
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "mcp_router"
+      description: "Provides A-share limit-up/down pools, market index data, historical bars, realtime quotes, and financial data."
+
+policy:
+  allow_implicit_invocation: true

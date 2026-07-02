@@ -1,13 +1,13 @@
 ---
 name: chan
-description: 缠论（缠中说禅）A股技术解析 skill。Use when Codex needs to analyze an A-share stock with Chan theory, fetch or normalize mcp_stock qfq daily bars, keep every raw K-line visible, identify fractals, strokes, Zhongshu, divergences/exhaustion, and buy/sell signals, or generate annotated K-line charts. Do not use for non-A-share markets, pure fundamentals, or high-frequency minute-level analysis.
+description: 缠论（缠中说禅）A股技术解析 skill。Use when Codex needs to analyze an A-share stock with Chan theory, fetch or normalize mcp_stock qfq daily bars, keep every raw K-line visible, identify fractals, strokes, Zhongshu, divergences/exhaustion, and buy/sell signals, or generate final PDF analysis reports. Do not use for non-A-share markets, pure fundamentals, or high-frequency minute-level analysis.
 ---
 
 # 缠论个股技术解析
 
 ## Overview
 
-这是一个面向 Agent 调用的缠论个股技术解析 skill，用于基于 A 股前复权行情数据生成结构化缠论分析结果。
+这是一个面向 Agent 调用的缠论个股技术解析 skill，用于基于 A 股前复权行情数据生成结构化缠论分析结果和即时 PDF 报告。
 
 本 skill 的数据主要来自 `mcp_stock` MCP 工具，默认使用 `qfq` 前复权日线数据。缠论相关逻辑完全自研实现。
 
@@ -16,7 +16,7 @@ description: 缠论（缠中说禅）A股技术解析 skill。Use when Codex nee
 - 通过 Agent 协议获取并整理 `mcp_stock` 行情数据
 - 对每根前复权 K 线执行自研缠论结构识别，不做包含合并
 - 输出可解释的分型、笔、中枢、买卖点和趋势结论
-- 生成适合用户查看的 K 线标注图和简洁文字结论
+- 生成最终 PDF 分析报告；报告完成后清理本次 bars/charts 中间产物
 
 ## Agent 调用协议
 
@@ -36,21 +36,28 @@ mcp_mcp_stock_get_historical_data(
 
 日期参数必须使用 `YYYYMMDD` 格式，例如 `20060102`。
 
-### Step 2：保存原始行情 JSON
+### Step 2：生成最终分析报告
 
-将 mcp_stock 返回的 bars 数据保存到当前工作目录的相对路径：
+将 mcp_stock 返回 payload 临时保存为任意本地 JSON 文件，然后调用报告入口：
 
-```text
-output/bars/{symbol}-{start_date}-{end_date}.json
+```bash
+python3 chan/scripts/report.py \
+  --input /path/to/mcp_stock_payload.json \
+  --symbol 603629 \
+  --name 利通电子
 ```
 
-例如：
+正式产物只保留在：
 
 ```text
-output/bars/603629-20250101-20250618.json
+output/reports/{symbol}-{name}-{start_date}-{end_date}.pdf
 ```
 
-可使用当前 skill 提供的保存入口：
+`report.py` 会完成数据归一化、缠论分析、临时图表生成、PDF 组装，并在报告生成后清理本次匹配的 `output/bars/` 与 `output/charts/` 产物。报告主图优先使用 SVG；PNG 仅作为当前 PDF 后端需要时的临时兼容图。不要把 `output/bars/` 或 `output/charts/` 作为最终交付。
+
+### Step 3：调试入口（非最终输出）
+
+如需单独检查数据归一化，可使用：
 
 ```bash
 python3 chan/scripts/save_bars.py \
@@ -60,7 +67,7 @@ python3 chan/scripts/save_bars.py \
   --input /path/to/mcp_stock_payload.json
 ```
 
-保存后的文件格式如下：
+保存后的调试文件格式如下：
 
 ```json
 {
@@ -77,19 +84,29 @@ python3 chan/scripts/save_bars.py \
 }
 ```
 
-### Step 3：分析与绘图
-
-使用图表入口读取保存后的 JSON，并输出到 `output/charts/`：
+如需单独检查图表，可使用：
 
 ```bash
 python3 chan/scripts/plot_bars.py output/bars/603629-20250101-20250618.json
 ```
 
-如环境缺少 `mplfinance`，或用户需要纯文本 SVG，可指定：
+这些调试产物不应作为最终输出；正式分析应以 `report.py` 生成的 PDF 为准。
 
-```bash
-python3 chan/scripts/plot_bars.py output/bars/603629-20250101-20250618.json --backend svg
-```
+## 报告章节
+
+`report.py` 输出的 PDF 应尽量详细，并从同一份结构化分析结果生成。报告至少包含：
+
+- 基本信息：股票代码、名称、数据周期、分析区间、K 线数量、生成时间。
+- 走势概览：最新收盘、区间涨跌幅、区间高低点、最近一笔方向、价格相对最近中枢的位置。
+- 缠论结构摘要：分型、笔、中枢、背离/背驰观察、买卖点数量与标签统计。
+- 中枢分析：列出每个中枢的日期区间、ZD、ZG、DD、GG。
+- 买卖点分析：列出 `1B/1S/2B/2S/3B/3S` 的日期、价格、中文触发说明。
+- 背离与背驰观察：区分普通 `DIV-B/DIV-S` 与近似 `BC-B/BC-S`，并输出中文触发说明。
+- 信号解读：解释最近买卖点的方向含义、触发依据、是否与 DIV/BC 标记重合，以及最近信号序列。
+- 背离与背驰解读：解释最近 DIV/BC 标记的力度含义和后续确认条件。
+- 当前结论：按结构位置、信号状态、力度观察、边界说明分层给出即时判断。
+- 风险与观察位：列出最新收盘、区间高低点、最近中枢 ZG/ZD/DD/GG、最近买卖点价格和结构重绘风险。
+- K 线与缠论结构图：作为 PDF 最后一个章节单独占用一页，优先内嵌 SVG，展示 K 线、成交量、MACD、分型、笔、中枢、DIV/BC、买卖点标记。
 
 ## 算法说明
 
@@ -108,7 +125,7 @@ python3 chan/scripts/plot_bars.py output/bars/603629-20250101-20250618.json --ba
 
 ### 3. 笔检测 (`detect_strokes`)
 
-参考缠中说禅第62课。相邻顶底分型构成一笔，需要至少 4 根独立 K 线间隔（含两端≥5 根）。
+参考缠中说禅第62课。一个顶分型与一个底分型之间可构成一笔，至少 3 个基本 K 线单位。
 
 ### 4. 中枢构建 (`detect_zhongshu`)
 
@@ -120,9 +137,13 @@ python3 chan/scripts/plot_bars.py output/bars/603629-20250101-20250618.json --ba
 
 ### 5. 买卖点判定 (`detect_signals`)
 
-- 一买/一卖：背驰（同向两笔中后笔价格创新高/低但力度减弱）
-- 二买/二卖：一买/一卖后回调不破
-- 三买/三卖：突破中枢后回调/反弹不回到中枢内
+当前实现为日线笔级别的简化判定，输出 `1B/1S/2B/2S/3B/3S`：
+
+- 一买/一卖：趋势背驰点。只有 `bottom_exhaustion` / `top_exhaustion` 且位于一笔结束点时，才标记为 `1B` / `1S`；普通 `DIV-B` / `DIV-S` 只作为背离提示。
+- 二买/二卖：一买/一卖后，首次回调/反弹不破一买低点或一卖高点。
+- 三买/三卖：离开中枢后回抽/反弹不回到中枢内，三买要求低点 > ZG，三卖要求高点 < ZD。
+
+注意：完整缠论中的一买/一卖依赖趋势背驰结构，严格定义参见 `references/notion.md`；当前代码未实现多级别递归确认。
 
 ## 文件结构
 
@@ -133,7 +154,8 @@ skills/chan/
 │   ├── bars_io.py                  # mcp_stock payload 校验、标准化、落盘
 │   ├── save_bars.py                # 保存行情 JSON 的 CLI
 │   ├── chan_core.py                # 缠论核心算法（无第三方缠论库依赖）
-│   └── plot_bars.py                # K 线图渲染与缠论结构叠加
+│   ├── plot_bars.py                # K 线图渲染与缠论结构叠加
+│   └── report.py                   # PDF 最终报告生成入口
 └── references/
     └── notion.md                   # 分型、笔、中枢、背驰、买卖点定义
 ```
@@ -143,7 +165,7 @@ skills/chan/
 ## 依赖
 
 ```bash
-pip install pandas numpy matplotlib mplfinance
+pip install pandas numpy matplotlib mplfinance reportlab
 ```
 
 | 包 | 用途 |
@@ -151,6 +173,7 @@ pip install pandas numpy matplotlib mplfinance
 | pandas | `mplfinance` 后端的数据整理 |
 | matplotlib | 图表渲染 |
 | mplfinance | K线图表 |
+| reportlab | PDF 报告生成 |
 
 无需 czsc 或任何第三方缠论库。
 
@@ -172,9 +195,10 @@ pip install pandas numpy matplotlib mplfinance
 1. **K 线数量保持不变**：当前不做包含合并，分析用 K 线数量应等于原始 bars 数量。
 2. **笔数量偏少**：当股价窄幅震荡时，分型难以形成，笔数自然偏少。扩大时间范围可改善。
 3. **中枢不存在**：笔数 < 3 或笔间无重叠区间时，无有效中枢。
-4. **背驰信号少**：需要至少两个同向笔才能判定，半年数据可能只有少数信号。
-5. **图表后端不可用**：缺少 `pandas`、`matplotlib` 或 `mplfinance` 时使用 `--backend svg`。
-6. **输出文件是产物**：`output/bars/` 与 `output/charts/` 可用于验证，但不应作为核心源码维护。
+4. **背离/背驰信号少**：背离需要同类分型价格与 MACD DIF 不确认；背驰还需要更严格的趋势结构，半年数据可能只有少数信号。
+5. **图表后端不可用**：SVG 主图由内置渲染器生成；缺少 `pandas`、`matplotlib` 或 `mplfinance` 时，PDF 可能缺少 PNG fallback 图。
+6. **PDF 依赖缺失**：缺少 `reportlab` 时使用 matplotlib PDF fallback；如需更精细排版，安装 `reportlab` 与 `svglib`。
+7. **最终输出唯一性**：`output/reports/` 下的 PDF 是正式产物，`output/bars/` 与 `output/charts/` 仅用于调试或临时验证。
 
 ## Verification Checklist
 
@@ -184,5 +208,6 @@ pip install pandas numpy matplotlib mplfinance
 - [ ] 分型识别有产出（≥ 5 个）
 - [ ] 笔检测有产出（≥ 3 笔）
 - [ ] `python3 -m pytest tests` 通过（当前环境需先安装 pytest）
-- [ ] `plot_bars.py` 已生成 PNG 或 SVG 图表
+- [ ] `report.py` 已生成 PDF 报告
+- [ ] 报告生成后，本次匹配的 `output/bars/` 与 `output/charts/` 中间产物已清理
 - [ ] 输出结论区分算法事实、信号解释和投资风险

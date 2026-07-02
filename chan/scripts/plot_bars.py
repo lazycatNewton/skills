@@ -21,7 +21,7 @@ import tempfile
 from typing import Any, Literal
 
 from bars_io import normalize_bars, validate_symbol, validate_yyyymmdd
-from chan_core import ChanAnalysis, FractalKind, SignalKind, StrokeDirection, analyze_chan
+from chan_core import ChanAnalysis, DivergenceKind, FractalKind, SignalKind, StrokeDirection, analyze_chan
 
 
 UP_COLOR = "#d62728"
@@ -36,6 +36,8 @@ STROKE_COLOR = "#d62728"
 ZHONGSHU_COLOR = "#2563eb"
 MACD_DIF_COLOR = "#f59e0b"
 MACD_DEA_COLOR = "#2563eb"
+BUY_SIGNAL_COLOR = "#2563eb"
+SELL_SIGNAL_COLOR = "#d62728"
 
 
 Backend = Literal["auto", "mplfinance", "svg"]
@@ -59,6 +61,8 @@ class OverlayStroke:
 
 @dataclass(frozen=True)
 class OverlayZhongshu:
+    start_index: int
+    end_index: int
     zd: float
     zg: float
     zd_source_index: int
@@ -74,11 +78,27 @@ class OverlaySignal:
 
 
 @dataclass(frozen=True)
+class OverlayDivergence:
+    kind: DivergenceKind
+    index: int
+    price: float
+    label: str
+
+
+@dataclass(frozen=True)
+class OverlayTradeArrow:
+    direction: Literal["buy", "sell"]
+    index: int
+    label: str
+
+
+@dataclass(frozen=True)
 class ChartOverlay:
     fractals: list[OverlayFractal]
     strokes: list[OverlayStroke]
     zhongshu: list[OverlayZhongshu]
     signals: list[OverlaySignal]
+    divergences: list[OverlayDivergence]
 
 
 def parse_args() -> argparse.Namespace:
@@ -201,6 +221,15 @@ def svg_circle(x: float, y: float, radius: float, color: str) -> str:
     return f'<circle cx="{x:.2f}" cy="{y:.2f}" r="{radius:.2f}" fill="{color}" />'
 
 
+def svg_triangle(x: float, y: float, size: float, color: str, *, direction: Literal["up", "down"]) -> str:
+    if direction == "up":
+        points = [(x, y - size), (x - size, y + size), (x + size, y + size)]
+    else:
+        points = [(x, y + size), (x - size, y - size), (x + size, y - size)]
+    value = " ".join(f"{point_x:.2f},{point_y:.2f}" for point_x, point_y in points)
+    return f'<polygon points="{value}" fill="{color}" />'
+
+
 def svg_text(
     text: str,
     x: float,
@@ -242,6 +271,63 @@ def svg_polyline(points: list[tuple[float, float]], color: str, width: float = 1
     return f'<polyline points="{value}" fill="none" stroke="{color}" stroke-width="{width:.2f}" />'
 
 
+def svg_vertical_arrow(x: float, y_start: float, y_end: float, color: str, *, width: float = 1.1) -> list[str]:
+    if y_end < y_start:
+        head_points = [(x, y_end), (x - 4, y_end + 7), (x + 4, y_end + 7)]
+    else:
+        head_points = [(x, y_end), (x - 4, y_end - 7), (x + 4, y_end - 7)]
+    head = " ".join(f"{px:.2f},{py:.2f}" for px, py in head_points)
+    return [
+        svg_line(x, y_start, x, y_end, color, width, dasharray="4 3"),
+        f'<polygon points="{head}" fill="{color}" />',
+    ]
+
+
+def divergence_display_label(kind: DivergenceKind) -> str:
+    if kind == "bottom_exhaustion":
+        return "BC-B"
+    if kind == "top_exhaustion":
+        return "BC-S"
+    return "DIV-B" if kind == "bottom_divergence" else "DIV-S"
+
+
+def is_buy_signal(kind: SignalKind) -> bool:
+    return kind.endswith("buy")
+
+
+def build_trade_arrows(overlay: ChartOverlay) -> list[OverlayTradeArrow]:
+    grouped: dict[tuple[str, int], list[str]] = {}
+    for divergence in overlay.divergences:
+        direction: Literal["buy", "sell"] = "buy" if "bottom" in divergence.kind else "sell"
+        grouped.setdefault((direction, divergence.index), []).append(divergence.label)
+    for signal in overlay.signals:
+        direction = "buy" if is_buy_signal(signal.kind) else "sell"
+        grouped.setdefault((direction, signal.index), []).append(signal.label)
+
+    arrows: list[OverlayTradeArrow] = []
+    for (direction, index), labels in sorted(grouped.items(), key=lambda item: item[0][1]):
+        deduped_labels = list(dict.fromkeys(labels))
+        arrows.append(OverlayTradeArrow(direction, index, "/".join(deduped_labels)))
+    return arrows
+
+
+def trade_arrow_label_lanes(arrows: list[OverlayTradeArrow], min_gap: int = 6, lane_count: int = 3) -> dict[tuple[str, int, str], int]:
+    last_index_by_lane: dict[tuple[str, int], int] = {}
+    lanes: dict[tuple[str, int, str], int] = {}
+    for arrow in arrows:
+        lane = 0
+        while lane < lane_count:
+            previous_index = last_index_by_lane.get((arrow.direction, lane))
+            if previous_index is None or arrow.index - previous_index >= min_gap:
+                break
+            lane += 1
+        if lane == lane_count:
+            lane = lane_count - 1
+        last_index_by_lane[(arrow.direction, lane)] = arrow.index
+        lanes[(arrow.direction, arrow.index, arrow.label)] = lane
+    return lanes
+
+
 def build_chart_overlay(analysis: ChanAnalysis) -> ChartOverlay:
     return ChartOverlay(
         fractals=[
@@ -260,6 +346,8 @@ def build_chart_overlay(analysis: ChanAnalysis) -> ChartOverlay:
         ],
         zhongshu=[
             OverlayZhongshu(
+                center.start_index,
+                center.end_index,
                 center.zd,
                 center.zg,
                 center.zd_source_index,
@@ -270,6 +358,15 @@ def build_chart_overlay(analysis: ChanAnalysis) -> ChartOverlay:
         signals=[
             OverlaySignal(signal.kind, signal.index, signal.price, signal.label)
             for signal in analysis.signals
+        ],
+        divergences=[
+            OverlayDivergence(
+                divergence.kind,
+                divergence.index,
+                divergence.price,
+                divergence_display_label(divergence.kind),
+            )
+            for divergence in analysis.divergences
         ],
     )
 
@@ -367,11 +464,15 @@ def render_candlestick_svg(
     for center in overlay.zhongshu:
         y_top = y_for_price(center.zg)
         y_bottom = y_for_price(center.zd)
+        box_start_index = max(center.start_index - 2, 0)
+        box_end_index = min(center.end_index + 2, len(bars) - 1)
+        box_left = x_for_index(box_start_index) - step / 2
+        box_right = x_for_index(box_end_index) + step / 2
         elements.append(
             svg_rect_outline(
-                left,
+                box_left,
                 y_top,
-                chart_width,
+                max(box_right - box_left, 1.0),
                 max(y_bottom - y_top, 1.0),
                 ZHONGSHU_COLOR,
                 stroke_width=1.35,
@@ -418,6 +519,34 @@ def render_candlestick_svg(
     for fractal in overlay.fractals:
         color = FRACTAL_TOP_COLOR if fractal.kind == "top" else FRACTAL_BOTTOM_COLOR
         elements.append(svg_circle(x_for_index(fractal.index), y_for_price(fractal.price), 3.4, color))
+
+    trade_arrows = build_trade_arrows(overlay)
+    label_lanes = trade_arrow_label_lanes(trade_arrows)
+    for trade_arrow in trade_arrows:
+        is_buy = trade_arrow.direction == "buy"
+        color = BUY_SIGNAL_COLOR if is_buy else SELL_SIGNAL_COLOR
+        x = x_for_index(trade_arrow.index)
+        lane = label_lanes[(trade_arrow.direction, trade_arrow.index, trade_arrow.label)]
+        if is_buy:
+            y_start = top + 4
+            y_end = y_for_price(bars[trade_arrow.index]["high"])
+            label_y = min(y_start + 12 + lane * 12, top + price_height - 4)
+        else:
+            y_start = top + price_height - 4
+            y_end = y_for_price(bars[trade_arrow.index]["low"])
+            label_y = max(y_start - 6 - lane * 12, top + 10)
+        elements.extend(svg_vertical_arrow(x, y_start, y_end, color))
+        elements.append(
+            svg_text(
+                trade_arrow.label,
+                x,
+                label_y,
+                size=9,
+                color=color,
+                anchor="middle",
+                weight="700",
+            )
+        )
 
     if show_volume:
         volume_top = top + price_height + panel_gap
@@ -530,10 +659,13 @@ def draw_chan_overlays(price_ax: Any, macd_ax: Any, analysis: ChanAnalysis) -> N
         )
 
     for center in overlay.zhongshu:
-        width = max(len(analysis.bars) - 1, 1)
+        box_start_index = max(center.start_index - 2, 0)
+        box_end_index = min(center.end_index + 2, len(analysis.bars) - 1)
+        box_left = box_start_index - 0.5
+        box_width = max(box_end_index - box_start_index + 1, 1)
         rectangle = Rectangle(
-            (0, center.zd),
-            width,
+            (box_left, center.zd),
+            box_width,
             center.zg - center.zd,
             facecolor="none",
             edgecolor=ZHONGSHU_COLOR,
@@ -568,24 +700,51 @@ def draw_chan_overlays(price_ax: Any, macd_ax: Any, analysis: ChanAnalysis) -> N
             zorder=6,
         )
 
-    for signal in overlay.signals:
-        is_buy = signal.kind.endswith("buy")
-        marker = "^" if is_buy else "v"
-        color = UP_COLOR if is_buy else DOWN_COLOR
-        vertical_align = "bottom" if is_buy else "top"
-        offset = 7 if is_buy else -7
-        price_ax.scatter([signal.index], [signal.price], marker=marker, s=112, color=color, zorder=7)
+    trade_arrows = build_trade_arrows(overlay)
+    label_lanes = trade_arrow_label_lanes(trade_arrows)
+    for trade_arrow in trade_arrows:
+        is_buy = trade_arrow.direction == "buy"
+        color = BUY_SIGNAL_COLOR if is_buy else SELL_SIGNAL_COLOR
+        lane = label_lanes[(trade_arrow.direction, trade_arrow.index, trade_arrow.label)]
+        y_min, y_max = price_ax.get_ylim()
+        y_span = y_max - y_min
+        pad = y_span * 0.01
+        bar = analysis.bars[trade_arrow.index]
+        if is_buy:
+            y_start = y_max - pad
+            y_end = bar.high
+        else:
+            y_start = y_min + pad
+            y_end = bar.low
         price_ax.annotate(
-            signal.label,
-            xy=(signal.index, signal.price),
-            xytext=(0, offset),
+            "",
+            xy=(trade_arrow.index, y_end),
+            xytext=(trade_arrow.index, y_start),
+            textcoords="data",
+            arrowprops={
+                "arrowstyle": "-|>",
+                "color": color,
+                "linestyle": (0, (3, 2)),
+                "linewidth": 1.0,
+                "mutation_scale": 7,
+                "shrinkA": 0,
+                "shrinkB": 0,
+            },
+            zorder=9,
+        )
+        label_offset = (-10 + lane * 9) if is_buy else (8 - lane * 9)
+        label_va = "top" if is_buy else "bottom"
+        price_ax.annotate(
+            trade_arrow.label,
+            xy=(trade_arrow.index, y_start),
+            xytext=(0, label_offset),
             textcoords="offset points",
             ha="center",
-            va=vertical_align,
-            fontsize=8,
+            va=label_va,
+            fontsize=7,
             color=color,
             fontweight="bold",
-            zorder=8,
+            zorder=10,
         )
 
 
