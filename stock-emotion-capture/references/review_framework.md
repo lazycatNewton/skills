@@ -7,7 +7,9 @@
 获取 `mcp_router.get_limit_pool` 指定日期的涨停/跌停数据后，先生成两个基础视图，再做个股判断：
 
 - 行业/板块视图：按 `industry` 汇总涨停数量、连板数量、最高连板高度、跌停数量，用于判断情绪集中度和亏钱效应分布。
-- 连板梯队视图：按 `consecutive_limit_up_days` 汇总涨停股，标出最高板、二板、首板，以及各梯队对应行业。
+- 连板梯队视图：按 `consecutive_limit_up_days` 汇总涨停股，报告第三节使用矩阵表呈现；左侧第一列为 `n板`，上侧表头为 `industry` 行业口径，单元格填写对应股票。
+
+默认整理时排除 ST 股和新股，即排除 `is_st=true` 或 `is_new_stock=true` 的记录。只有使用者明确声明“包括ST和新股”时，才将这类股票纳入行业/板块视图、连板梯队视图和后续筛选。报告中应区分原始数量和过滤后数量。
 
 不要在完成这两个基础视图前直接给出观察池。
 
@@ -20,6 +22,7 @@
 - 涨停数量和跌停数量。
 - 连板高度：取最高的 `consecutive_limit_up_days`。
 - 连板梯队：按 `consecutive_limit_up_days` 对涨停股分组。
+- 连板梯队表格只展示 2 板及以上样本；首板数量和结构放入市场情绪或涨停结构部分说明。
 - 封板质量：更早的 `first_limit_time`、更稳定的 `last_limit_time`、更低的 `break_limit_count`、更强的 `seal_strength`。
 - 亏钱效应：跌停数量、连续跌停、反复开板行为。
 - 指数背景：如有指数数据，可作为背景使用，但要与涨停池结论分开。
@@ -83,7 +86,7 @@
 最终报告必须写入项目相对路径：
 
 ```text
-output/reports/stock-emotion-capture/{YYYYMMDD}.md
+output/reports/{YYYYMMDD}.md
 ```
 
 其中 `{YYYYMMDD}` 使用本次复盘交易日期，例如 `20260702`。报告正文和文件名必须使用同一个交易日期，避免出现查询日期、报告日期不一致。

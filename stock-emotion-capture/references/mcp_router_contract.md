@@ -4,6 +4,19 @@
 
 ## 主工具
 
+默认运行环境是已安装所需 MCP 服务的 Agent。数据获取由 Agent 调用 `mcp_router.get_limit_pool` 完成；Python 数据整理脚本不直接连接 MCP 服务，只接收 MCP 返回的原始 payload。
+
+为避免大 payload 在对话显示层被截断，Agent 获取 MCP 返回后应优先通过桥接脚本保存，不要先完整打印到对话中：
+
+```bash
+python3 scripts/bridge_limit_pool_payload.py --date 20260702 --input -
+```
+
+桥接脚本从 stdin 或 `--input` 文件读取 MCP 原始 JSON，默认写入：
+
+- raw payload: `output/raw/stock-emotion-capture/{YYYYMMDD}-limit-pool.json`
+- organized data: `output/data/stock-emotion-capture/{YYYYMMDD}-organized.json`
+
 调用参数：
 
 ```json
