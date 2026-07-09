@@ -3,6 +3,7 @@ import json
 from scripts.stock_emotion_data import (
     fetch_and_organize_limit_pool,
     format_ladder_matrix_markdown,
+    format_limit_down_ladder_matrix_markdown,
     organize_limit_pool,
     should_include_special,
 )
@@ -156,7 +157,29 @@ def test_format_ladder_matrix_markdown_uses_board_rows_and_industry_columns():
 
     table = format_ladder_matrix_markdown(organized)
 
-    assert table.splitlines()[0] == "| n板 | 半导体 | 化学制品 |"
-    assert "| 3板 | `000001 A股一` | - |" in table
-    assert "| 2板 | `000006 A股四` | `000005 A股三` |" in table
-    assert "1板" not in table
+    assert table.splitlines()[0] == "| n板 | 半导体 | 化学制品 | 光学光电 |"
+    assert "| 3板 | `000001 A股一` | - | - |" in table
+    assert "| 2板 | `000006 A股四` | `000005 A股三` | - |" in table
+    assert "| 1板 | - | - | `000004 A股二` |" in table
+
+
+def test_format_limit_down_ladder_matrix_markdown_uses_down_rows_and_industry_columns():
+    payload = sample_payload()
+    payload["limit_down"].append(
+        {
+            "rank": 3,
+            "symbol": "600003",
+            "name": "跌停二",
+            "industry": "房地产",
+            "consecutive_limit_down_days": 2,
+            "is_st": False,
+            "is_new_stock": False,
+        }
+    )
+    organized = organize_limit_pool(payload)
+
+    table = format_limit_down_ladder_matrix_markdown(organized)
+
+    assert table.splitlines()[0] == "| n连跌 | 房地产 | 半导体 |"
+    assert "| 2连跌 | `600003 跌停二` | - |" in table
+    assert "| 1连跌 | - | `600001 跌停一` |" in table

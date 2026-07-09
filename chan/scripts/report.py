@@ -202,7 +202,7 @@ def structure_summary(model: ReportModel) -> list[str]:
     divergence_counts = divergence_type_counts(analysis.divergences)
     signal_counts = signal_type_counts(analysis.signals)
     return [
-        f"K 线数量 {len(model.bars)}，分析用 K 线数量 {len(analysis.analysis_bars)}；当前规则不做包含处理。",
+        f"K 线数量 {len(model.bars)}，包含处理后分析用 K 线数量 {len(analysis.analysis_bars)}。",
         f"分型 {len(analysis.fractals)} 个，其中顶分型 {top_count} 个、底分型 {bottom_count} 个。",
         f"笔 {len(analysis.strokes)} 笔，其中向上笔 {up_strokes} 笔、向下笔 {down_strokes} 笔。",
         f"中枢 {len(analysis.zhongshu)} 个，背离/背驰观察 {len(analysis.divergences)} 个，买卖点 {len(analysis.signals)} 个。",

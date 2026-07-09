@@ -193,30 +193,57 @@ def organized_limit_pool_to_dict(organized: OrganizedLimitPool) -> dict[str, Any
 def format_ladder_matrix_markdown(
     organized: OrganizedLimitPool,
     *,
-    min_board_height: int = 2,
+    min_board_height: int = 1,
 ) -> str:
     """Render the report ladder section as an n-board by industry Markdown matrix."""
-    if min_board_height < 1:
+    return _format_ladder_matrix_markdown(
+        organized.limit_up,
+        height_getter=lambda item: item.consecutive_limit_up_days,
+        first_column="n板",
+        row_suffix="板",
+        empty_text="当日无涨停股。",
+        min_height=min_board_height,
+    )
+
+
+def format_limit_down_ladder_matrix_markdown(
+    organized: OrganizedLimitPool,
+    *,
+    min_board_height: int = 1,
+) -> str:
+    """Render the limit-down ladder as an n-down by industry Markdown matrix."""
+    return _format_ladder_matrix_markdown(
+        organized.limit_down,
+        height_getter=lambda item: item.consecutive_limit_down_days,
+        first_column="n连跌",
+        row_suffix="连跌",
+        empty_text="当日无跌停股。",
+        min_height=min_board_height,
+    )
+
+
+def _format_ladder_matrix_markdown(
+    records: Sequence[StockRecord],
+    *,
+    height_getter: Callable[[StockRecord], int],
+    first_column: str,
+    row_suffix: str,
+    empty_text: str,
+    min_height: int,
+) -> str:
+    if min_height < 1:
         raise ValueError("min_board_height must be at least 1")
 
     rows_by_height: dict[int, dict[str, list[StockRecord]]] = {}
     industry_order: list[str] = []
     heights = sorted(
-        {
-            max(item.consecutive_limit_up_days, 1)
-            for item in organized.limit_up
-            if max(item.consecutive_limit_up_days, 1) >= min_board_height
-        },
+        {max(height_getter(item), 1) for item in records if max(height_getter(item), 1) >= min_height},
         reverse=True,
     )
 
     for height in heights:
         level_items = sorted(
-            (
-                item
-                for item in organized.limit_up
-                if max(item.consecutive_limit_up_days, 1) == height
-            ),
+            (item for item in records if max(height_getter(item), 1) == height),
             key=lambda item: item.rank or 999999,
         )
         row: dict[str, list[StockRecord]] = {}
@@ -227,15 +254,15 @@ def format_ladder_matrix_markdown(
         rows_by_height[height] = row
 
     if not heights:
-        return f"当日无 {min_board_height} 板及以上连板股。"
+        return empty_text
 
-    header = ["n板", *industry_order]
+    header = [first_column, *industry_order]
     lines = [
         _markdown_row(header),
         _markdown_row(["---", *(["---"] * len(industry_order))]),
     ]
     for height in heights:
-        row_cells = [f"{height}板"]
+        row_cells = [f"{height}{row_suffix}"]
         for industry in industry_order:
             items = rows_by_height[height].get(industry, [])
             if not items:

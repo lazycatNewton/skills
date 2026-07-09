@@ -36,6 +36,10 @@ class AnalysisKBar:
     index: int
     start_index: int
     end_index: int
+    high_index: int
+    low_index: int
+    high_date: str
+    low_date: str
     date: str
     open: float
     high: float
@@ -145,21 +149,141 @@ def build_kbars(raw_bars: list[dict[str, Any]]) -> list[KBar]:
     ]
 
 
-def map_kbars(bars: list[KBar]) -> list[AnalysisKBar]:
-    """Map every raw K-line directly; do not apply Chan inclusion merging."""
+def analysis_bar_from_kbar(bar: KBar, index: int) -> AnalysisKBar:
+    return AnalysisKBar(
+        index=index,
+        start_index=bar.index,
+        end_index=bar.index,
+        high_index=bar.index,
+        low_index=bar.index,
+        high_date=bar.date,
+        low_date=bar.date,
+        date=bar.date,
+        open=bar.open,
+        high=bar.high,
+        low=bar.low,
+        close=bar.close,
+    )
+
+
+def kbar_direction(left: AnalysisKBar, right: AnalysisKBar) -> StrokeDirection | None:
+    if right.high > left.high and right.low > left.low:
+        return "up"
+    if right.high < left.high and right.low < left.low:
+        return "down"
+    return None
+
+
+def has_inclusion(left: AnalysisKBar, right: AnalysisKBar) -> bool:
+    left_contains_right = left.high >= right.high and left.low <= right.low
+    right_contains_left = right.high >= left.high and right.low <= left.low
+    return left_contains_right or right_contains_left
+
+
+def initial_merge_direction(left: AnalysisKBar, right: AnalysisKBar) -> StrokeDirection:
+    if right.close != left.close:
+        return "up" if right.close > left.close else "down"
+    left_mid = (left.high + left.low) / 2
+    right_mid = (right.high + right.low) / 2
+    return "up" if right_mid >= left_mid else "down"
+
+
+def merge_direction(
+    analysis_bars: list[AnalysisKBar],
+    incoming: AnalysisKBar,
+    last_direction: StrokeDirection | None,
+) -> StrokeDirection:
+    if len(analysis_bars) >= 2:
+        direction = kbar_direction(analysis_bars[-2], analysis_bars[-1])
+        if direction is not None:
+            return direction
+    if last_direction is not None:
+        return last_direction
+    return initial_merge_direction(analysis_bars[-1], incoming)
+
+
+def high_source(left: AnalysisKBar, right: AnalysisKBar, high: float) -> tuple[int, str]:
+    if left.high == high:
+        return left.high_index, left.high_date
+    return right.high_index, right.high_date
+
+
+def low_source(left: AnalysisKBar, right: AnalysisKBar, low: float) -> tuple[int, str]:
+    if left.low == low:
+        return left.low_index, left.low_date
+    return right.low_index, right.low_date
+
+
+def merge_inclusion_kbars(left: AnalysisKBar, right: AnalysisKBar, direction: StrokeDirection) -> AnalysisKBar:
+    if direction == "up":
+        high = max(left.high, right.high)
+        low = max(left.low, right.low)
+    else:
+        high = min(left.high, right.high)
+        low = min(left.low, right.low)
+
+    high_index, high_date = high_source(left, right, high)
+    low_index, low_date = low_source(left, right, low)
+    return AnalysisKBar(
+        index=left.index,
+        start_index=left.start_index,
+        end_index=right.end_index,
+        high_index=high_index,
+        low_index=low_index,
+        high_date=high_date,
+        low_date=low_date,
+        date=right.date,
+        open=left.open,
+        high=high,
+        low=low,
+        close=right.close,
+    )
+
+
+def reindex_analysis_bars(analysis_bars: list[AnalysisKBar]) -> list[AnalysisKBar]:
     return [
         AnalysisKBar(
             index=index,
-            start_index=bar.index,
-            end_index=bar.index,
+            start_index=bar.start_index,
+            end_index=bar.end_index,
+            high_index=bar.high_index,
+            low_index=bar.low_index,
+            high_date=bar.high_date,
+            low_date=bar.low_date,
             date=bar.date,
             open=bar.open,
             high=bar.high,
             low=bar.low,
             close=bar.close,
         )
-        for index, bar in enumerate(bars)
+        for index, bar in enumerate(analysis_bars)
     ]
+
+
+def map_kbars(bars: list[KBar]) -> list[AnalysisKBar]:
+    """Build analysis K-lines after Chan inclusion processing."""
+    analysis_bars: list[AnalysisKBar] = []
+    last_direction: StrokeDirection | None = None
+
+    for bar in bars:
+        current = analysis_bar_from_kbar(bar, len(analysis_bars))
+        if not analysis_bars:
+            analysis_bars.append(current)
+            continue
+
+        previous = analysis_bars[-1]
+        if has_inclusion(previous, current):
+            direction = merge_direction(analysis_bars, current, last_direction)
+            analysis_bars[-1] = merge_inclusion_kbars(previous, current, direction)
+            last_direction = direction
+            continue
+
+        direction = kbar_direction(previous, current)
+        if direction is not None:
+            last_direction = direction
+        analysis_bars.append(current)
+
+    return reindex_analysis_bars(analysis_bars)
 
 
 def detect_fractals(analysis_bars: list[AnalysisKBar]) -> list[Fractal]:
@@ -177,8 +301,8 @@ def detect_fractals(analysis_bars: list[AnalysisKBar]) -> list[Fractal]:
                 Fractal(
                     kind="top",
                     analysis_index=index,
-                    index=middle.end_index,
-                    date=middle.date,
+                    index=middle.high_index,
+                    date=middle.high_date,
                     price=middle.high,
                     high=middle.high,
                     low=middle.low,
@@ -189,8 +313,8 @@ def detect_fractals(analysis_bars: list[AnalysisKBar]) -> list[Fractal]:
                 Fractal(
                     kind="bottom",
                     analysis_index=index,
-                    index=middle.end_index,
-                    date=middle.date,
+                    index=middle.low_index,
+                    date=middle.low_date,
                     price=middle.low,
                     high=middle.high,
                     low=middle.low,
@@ -226,7 +350,7 @@ def detect_strokes(fractals: list[Fractal], min_basic_bars: int = 3) -> list[Str
                 start = end
             continue
 
-        if end.index - start.index + 1 < min_basic_bars:
+        if end.analysis_index - start.analysis_index + 1 < min_basic_bars:
             continue
 
         direction: StrokeDirection = "up" if start.kind == "bottom" and end.kind == "top" else "down"
