@@ -18,6 +18,31 @@ from chan_core import ChanAnalysis, ChanSignal, Divergence, Zhongshu, analyze_ch
 from plot_bars import has_mplfinance, render_candlestick_mplfinance, render_candlestick_svg
 
 
+SKILL_ROOT = Path(__file__).resolve().parents[1]
+
+
+def resolve_output_path(path: Path) -> Path:
+    if path.is_absolute():
+        return path
+    return Path.cwd() / path
+
+
+def resolve_input_path(path: Path) -> Path:
+    if path.is_absolute() or path.exists():
+        return path
+    skill_path = SKILL_ROOT / path
+    if skill_path.exists():
+        return skill_path
+    return path
+
+
+def format_cwd_relative_path(path: Path) -> str:
+    try:
+        return str(path.relative_to(Path.cwd()))
+    except ValueError:
+        return str(path)
+
+
 @dataclass(frozen=True)
 class ChartAssets:
     svg_path: Path
@@ -680,15 +705,17 @@ def cleanup_matching_artifacts(metadata: dict[str, str], input_path: Path) -> No
     symbol = metadata["symbol"]
     start_date = metadata["start_date"]
     end_date = metadata["end_date"]
+    resolved_input_path = resolve_input_path(input_path)
+    bars_path = Path.cwd() / "output" / "bars" / f"{symbol}-{start_date}-{end_date}.json"
     candidates = [
-        Path("output") / "bars" / f"{symbol}-{start_date}-{end_date}.json",
-        input_path if input_path.parts[:2] == ("output", "bars") else None,
+        bars_path,
+        resolved_input_path if resolved_input_path.parent == bars_path.parent else None,
     ]
     for candidate in candidates:
         if candidate is not None and candidate.exists():
             candidate.unlink()
 
-    charts_dir = Path("output") / "charts"
+    charts_dir = Path.cwd() / "output" / "charts"
     if charts_dir.exists():
         for chart_path in charts_dir.glob(f"{symbol}-{start_date}-{end_date}*"):
             if chart_path.suffix.lower() in {".png", ".svg"}:
@@ -711,7 +738,8 @@ def generate_report(
     bars = normalize_bars(payload)
     metadata = infer_metadata(payload, bars, input_path, symbol)
     analysis = analyze_chan(bars)
-    temp_dir = Path("output") / "tmp" / f"report-{metadata['symbol']}-{uuid4().hex[:8]}"
+    temp_dir = Path.cwd() / "output" / "tmp" / f"report-{metadata['symbol']}-{uuid4().hex[:8]}"
+    output_dir = resolve_output_path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     try:
         chart_assets = create_chart_assets(bars, metadata, temp_dir, width, height, dpi)
@@ -739,7 +767,7 @@ def generate_report(
 def main() -> int:
     args = parse_args()
     pdf_path = generate_report(
-        Path(args.input),
+        resolve_input_path(Path(args.input)),
         symbol=args.symbol,
         name=args.name,
         output_dir=Path(args.output_dir),
@@ -749,7 +777,7 @@ def main() -> int:
         keep_temp=args.keep_temp,
         cleanup_artifacts=not args.no_cleanup_artifacts,
     )
-    print(pdf_path)
+    print(format_cwd_relative_path(pdf_path))
     return 0
 
 

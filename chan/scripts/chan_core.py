@@ -341,30 +341,36 @@ def detect_strokes(fractals: list[Fractal], min_basic_bars: int = 3) -> list[Str
     if not fractals:
         return strokes
 
+    def stronger_same_kind(candidate: Fractal, reference: Fractal) -> bool:
+        if candidate.kind == "top":
+            return candidate.price > reference.price
+        return candidate.price < reference.price
+
+    def build_stroke(start: Fractal, end: Fractal) -> Stroke:
+        direction: StrokeDirection = "up" if start.kind == "bottom" and end.kind == "top" else "down"
+        return Stroke(
+            start=start,
+            end=end,
+            direction=direction,
+            start_index=start.index,
+            end_index=end.index,
+            high=max(start.price, end.price),
+            low=min(start.price, end.price),
+        )
+
     start = fractals[0]
     for end in fractals[1:]:
         if end.kind == start.kind:
-            if end.kind == "top" and end.price > start.price:
-                start = end
-            elif end.kind == "bottom" and end.price < start.price:
+            if stronger_same_kind(end, start):
+                if strokes:
+                    strokes[-1] = build_stroke(strokes[-1].start, end)
                 start = end
             continue
 
         if end.analysis_index - start.analysis_index + 1 < min_basic_bars:
             continue
 
-        direction: StrokeDirection = "up" if start.kind == "bottom" and end.kind == "top" else "down"
-        strokes.append(
-            Stroke(
-                start=start,
-                end=end,
-                direction=direction,
-                start_index=start.index,
-                end_index=end.index,
-                high=max(start.price, end.price),
-                low=min(start.price, end.price),
-            )
-        )
+        strokes.append(build_stroke(start, end))
         start = end
 
     return strokes

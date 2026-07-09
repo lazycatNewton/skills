@@ -160,6 +160,13 @@ def build_default_output_path(
     return root / "output" / "charts" / filename
 
 
+def format_cwd_relative_path(path: Path) -> str:
+    try:
+        return str(path.relative_to(Path.cwd()))
+    except ValueError:
+        return str(path)
+
+
 def has_mplfinance() -> bool:
     configure_plot_cache()
     try:
@@ -885,7 +892,7 @@ def main() -> int:
         )
         output_path.write_text(svg, encoding="utf-8")
 
-    print(output_path)
+    print(format_cwd_relative_path(output_path))
     return 0
 
 

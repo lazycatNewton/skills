@@ -67,6 +67,14 @@ def build_bars_path(
     return root / "output" / "bars" / filename
 
 
+def format_cwd_relative_path(path: Path) -> str:
+    """Return a cwd-relative path when the output is inside the call directory."""
+    try:
+        return str(path.relative_to(Path.cwd()))
+    except ValueError:
+        return str(path)
+
+
 def extract_bars(payload: Any) -> list[dict[str, Any]]:
     """
     Extract bars from common mcp_stock payload shapes.

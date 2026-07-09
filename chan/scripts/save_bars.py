@@ -14,7 +14,7 @@ import argparse
 import json
 import sys
 
-from bars_io import save_bars_document
+from bars_io import format_cwd_relative_path, save_bars_document
 
 
 def parse_args() -> argparse.Namespace:
@@ -46,7 +46,7 @@ def main() -> int:
         end_date=args.end_date,
         payload=payload,
     )
-    print(output_path)
+    print(format_cwd_relative_path(output_path))
     return 0
 
 

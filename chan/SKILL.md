@@ -41,7 +41,7 @@ mcp_mcp_stock_get_historical_data(
 将 mcp_stock 返回 payload 临时保存为任意本地 JSON 文件，然后调用报告入口：
 
 ```bash
-python3 chan/scripts/report.py \
+python3 scripts/report.py \
   --input /path/to/mcp_stock_payload.json \
   --symbol 603629 \
   --name 利通电子
@@ -53,6 +53,8 @@ python3 chan/scripts/report.py \
 output/reports/chan/{symbol}-{name}-{start_date}-{end_date}.pdf
 ```
 
+所有未显式指定为绝对路径的输出和临时文件，都以调用脚本时的当前工作目录为基准生成。
+
 `report.py` 会完成数据归一化、缠论分析、临时图表生成、PDF 组装，并在报告生成后清理本次匹配的 `output/bars/` 与 `output/charts/` 产物。报告主图优先使用 SVG；PNG 仅作为当前 PDF 后端需要时的临时兼容图。不要把 `output/bars/` 或 `output/charts/` 作为最终交付。
 
 ### Step 3：调试入口（非最终输出）
@@ -60,7 +62,7 @@ output/reports/chan/{symbol}-{name}-{start_date}-{end_date}.pdf
 如需单独检查数据归一化，可使用：
 
 ```bash
-python3 chan/scripts/save_bars.py \
+python3 scripts/save_bars.py \
   --symbol 603629 \
   --start-date 20250101 \
   --end-date 20250618 \
@@ -87,7 +89,7 @@ python3 chan/scripts/save_bars.py \
 如需单独检查图表，可使用：
 
 ```bash
-python3 chan/scripts/plot_bars.py output/bars/603629-20250101-20250618.json
+python3 scripts/plot_bars.py output/bars/603629-20250101-20250618.json
 ```
 
 这些调试产物不应作为最终输出；正式分析应以 `report.py` 生成的 PDF 为准。
