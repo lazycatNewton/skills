@@ -1,6 +1,6 @@
 ---
 name: chan
-description: 缠论（缠中说禅）A股技术解析 skill。Use when Codex needs to analyze an A-share stock with Chan theory, fetch or normalize mcp_stock qfq daily bars, keep every raw K-line visible, identify fractals, strokes, Zhongshu, divergences/exhaustion, and buy/sell signals, or generate final PDF analysis reports. Do not use for non-A-share markets, pure fundamentals, or high-frequency minute-level analysis.
+description: 缠论（缠中说禅）A股技术解析 skill。Use when Codex needs to analyze an A-share stock with Chan theory, fetch or normalize mcp_router qfq daily bars, keep every raw K-line visible, identify fractals, strokes, Zhongshu, divergences/exhaustion, and buy/sell signals, or generate final PDF analysis reports. Do not use for non-A-share markets, pure fundamentals, or high-frequency minute-level analysis.
 ---
 
 # 缠论个股技术解析
@@ -9,11 +9,11 @@ description: 缠论（缠中说禅）A股技术解析 skill。Use when Codex nee
 
 这是一个面向 Agent 调用的缠论个股技术解析 skill，用于基于 A 股前复权行情数据生成结构化缠论分析结果和即时 PDF 报告。
 
-本 skill 的数据主要来自 `mcp_stock` MCP 工具，默认使用 `qfq` 前复权日线数据。缠论相关逻辑完全自研实现。
+本 skill 的数据主要来自 `mcp_router` MCP 工具，默认使用 `qfq` 前复权日线数据。缠论相关逻辑完全自研实现。
 
 **核心目标：**
 
-- 通过 Agent 协议获取并整理 `mcp_stock` 行情数据
+- 通过 Agent 协议获取并整理 `mcp_router` 行情数据
 - 对前复权 K 线执行包含处理后，再识别分型、笔、中枢和买卖点
 - 输出可解释的分型、笔、中枢、买卖点和趋势结论
 - 生成最终 PDF 分析报告；报告完成后清理本次 bars/charts 中间产物
@@ -163,7 +163,7 @@ python3 scripts/plot_bars.py output/bars/603629-20250101-20250618.json
 skills/chan/
 ├── SKILL.md                        # 本文件
 ├── scripts/
-│   ├── bars_io.py                  # mcp_stock payload 校验、标准化、落盘
+│   ├── bars_io.py                  # mcp_router payload 校验、标准化、落盘
 │   ├── save_bars.py                # 保存行情 JSON 的 CLI
 │   ├── chan_core.py                # 缠论核心算法（无第三方缠论库依赖）
 │   ├── plot_bars.py                # K 线图渲染与缠论结构叠加
@@ -214,7 +214,7 @@ pip install pandas numpy matplotlib mplfinance reportlab
 
 ## Verification Checklist
 
-- [ ] mcp_stock 数据获取成功，K 线数 ≥ 60
+- [ ] mcp_router 数据获取成功，K 线数 ≥ 60
 - [ ] JSON 文件格式正确，date 字段为 YYYYMMDD 格式
 - [ ] 包含处理正常（analysis_bars 数量小于或等于 bars 数量，分型落点对应原始 K 线真实高低点）
 - [ ] 分型识别有产出（≥ 5 个）
