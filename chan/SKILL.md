@@ -1,6 +1,6 @@
 ---
 name: chan
-description: 缠论（缠中说禅）A股技术解析 skill。Use when Codex needs to analyze an A-share stock with Chan theory, fetch or normalize mcp_router qfq daily bars, keep every raw K-line visible, identify fractals, strokes, Zhongshu, divergences/exhaustion, and buy/sell signals, or generate final PDF analysis reports. Do not use for non-A-share markets, pure fundamentals, or high-frequency minute-level analysis.
+description: 缠论（缠中说禅）A股技术解析 skill。Use when Codex needs to analyze an A-share stock with Chan theory, obtain or normalize Tushare-backed mcp_router qfq daily bars, keep every raw K-line visible, identify fractals, strokes, Zhongshu, divergences/exhaustion, and buy/sell signals, or generate final PDF analysis reports. Do not use for non-A-share markets, pure fundamentals, or high-frequency minute-level analysis.
 ---
 
 # 缠论个股技术解析
@@ -9,7 +9,7 @@ description: 缠论（缠中说禅）A股技术解析 skill。Use when Codex nee
 
 这是一个面向 Agent 调用的缠论个股技术解析 skill，用于基于 A 股前复权行情数据生成结构化缠论分析结果和即时 PDF 报告。
 
-本 skill 的数据主要来自 `mcp_router` MCP 工具，默认使用 `qfq` 前复权日线数据。缠论相关逻辑完全自研实现。
+本 skill 的行情数据唯一来源是以 Tushare 为上游的 `mcp_router` MCP 工具，默认使用 `qfq` 前复权日线数据。缠论相关逻辑完全自研实现。
 
 **核心目标：**
 
@@ -22,10 +22,10 @@ description: 缠论（缠中说禅）A股技术解析 skill。Use when Codex nee
 
 ### Step 1：获取前复权日 K 线
 
-使用 mcp_stock MCP 工具获取 qfq 前复权日线数据：
+仅使用 Tushare 驱动的 `mcp_router` MCP 工具获取 qfq 前复权日线数据：
 
 ```
-mcp_mcp_stock_get_historical_data(
+mcp_mcp_router_get_historical_data(
     symbol="603629",
     start_date="20250101",
     end_date="20250618",
@@ -36,13 +36,15 @@ mcp_mcp_stock_get_historical_data(
 
 日期参数必须使用 `YYYYMMDD` 格式，例如 `20060102`。
 
+不得使用其他行情源作为替代或回退。若 `mcp_router` 无法从 Tushare 返回完整、可靠的 qfq 日线数据，应停止分析并说明数据前置条件未满足，不得基于估算、非 qfq 或不完整数据生成结论或 PDF。
+
 ### Step 2：生成最终分析报告
 
-将 mcp_stock 返回 payload 临时保存为任意本地 JSON 文件，然后调用报告入口：
+将 `mcp_router` 返回的 Tushare payload 临时保存为任意本地 JSON 文件，然后调用报告入口：
 
 ```bash
 python3 scripts/report.py \
-  --input /path/to/mcp_stock_payload.json \
+  --input /path/to/mcp_router_tushare_payload.json \
   --symbol 603629 \
   --name 利通电子
 ```
@@ -66,7 +68,7 @@ python3 scripts/save_bars.py \
   --symbol 603629 \
   --start-date 20250101 \
   --end-date 20250618 \
-  --input /path/to/mcp_stock_payload.json
+  --input /path/to/mcp_router_tushare_payload.json
 ```
 
 保存后的调试文件格式如下：
@@ -78,7 +80,7 @@ python3 scripts/save_bars.py \
   "end_date": "20250618",
   "period": "daily",
   "adjust": "qfq",
-  "source": "mcp_stock",
+  "source": "mcp_router_tushare",
   "bars": [
     {"date": "20250102", "open": 19.63, "high": 20.18, "low": 19.00, "close": 19.71, "volume": 14397312},
     ...
@@ -163,7 +165,7 @@ python3 scripts/plot_bars.py output/bars/603629-20250101-20250618.json
 skills/chan/
 ├── SKILL.md                        # 本文件
 ├── scripts/
-│   ├── bars_io.py                  # mcp_router payload 校验、标准化、落盘
+│   ├── bars_io.py                  # mcp_router/Tushare payload 校验、标准化、落盘
 │   ├── save_bars.py                # 保存行情 JSON 的 CLI
 │   ├── chan_core.py                # 缠论核心算法（无第三方缠论库依赖）
 │   ├── plot_bars.py                # K 线图渲染与缠论结构叠加
@@ -214,7 +216,8 @@ pip install pandas numpy matplotlib mplfinance reportlab
 
 ## Verification Checklist
 
-- [ ] mcp_router 数据获取成功，K 线数 ≥ 60
+- [ ] mcp_router 已通过 Tushare 成功获取 qfq 日线数据，K 线数 ≥ 60
+- [ ] 未使用其他行情数据源
 - [ ] JSON 文件格式正确，date 字段为 YYYYMMDD 格式
 - [ ] 包含处理正常（analysis_bars 数量小于或等于 bars 数量，分型落点对应原始 K 线真实高低点）
 - [ ] 分型识别有产出（≥ 5 个）
